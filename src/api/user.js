@@ -1,9 +1,9 @@
 import request from '@/utils/request'
 
-export function getAllprovinces (data) {
+export function getRisk (query) {
   return request({
-    url: '/extendApp/getAllProvinces',
+    url: '/getrisk',
     method: 'get',
-    params: data
+    params: query
   })
 }
