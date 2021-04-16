@@ -7,3 +7,10 @@ export function getRisk (query) {
     params: query
   })
 }
+
+export function getOpenLast () {
+  return request({
+    url: '/rest/findRecentLayers',
+    method: 'post'
+  })
+}

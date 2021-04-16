@@ -2,10 +2,11 @@
   <div class="container">
     <div id="cesiumContainer">
       <div class="risk-window">
-        <el-form label-width="60px">
-          <el-form-item label="项目">
-            <el-select v-model="projectName">
-              <el-option v-for="(item, index) in projectList" :key="index" :label="item" :value="item"></el-option>
+        <el-form :model="form" :rules="rules" ref="form" label-width="60px">
+          <el-form-item label="项目" prop="project">
+            <el-select v-model="form.project">
+              <el-option v-for="(item, index) in projectList" :key="index" :label="item.layerName"
+                         :value="item"></el-option>
             </el-select>
           </el-form-item>
         </el-form>
@@ -14,9 +15,9 @@
             <el-button size="mini" type="primary" @click="generateView" :disabled="riskButton" :loading="riskLoading">
               {{ riskText }}
             </el-button>
-            <el-button type="primary" size="mini" :disabled="tableViewButton" @click="tableView">查看图表</el-button>
             <el-button type="primary" size="mini" :disabled="clearWarnButton" @click="clearWarn">清除绘制</el-button>
           </el-button-group>
+          <el-button type="success" size="mini" @click="openLayers(form.project)">加载图层</el-button>
         </div>
       </div>
     </div>
@@ -25,23 +26,31 @@
 
 <script>
 import '../../../static/Build/Cesium/Widgets/widgets.css'
-import {getRisk} from '../../api/user'
+import {getOpenLast, getRisk} from '../../api/user'
 
 export default {
   name: 'home',
   mounted () {
     this.initCesium()
+    this.getProjectList()
   },
   data () {
     return {
       viewer: null,
-      projectName: '南京地铁二号线',
-      projectList: ['南京地铁二号线'],
+      form: {
+        project: null
+      },
+      rules: {
+        project: [
+          {required: true, message: '请选择项目', trigger: 'change'}
+        ]
+      },
+      projectList: [],
       riskText: '生成图像',
       riskLoading: false,
       riskButton: false,
-      tableViewButton: true,
-      clearWarnButton: true
+      clearWarnButton: true,
+      currentLayer: null
     }
   },
   methods: {
@@ -83,75 +92,125 @@ export default {
       viewer.imageryLayers.addImageryProvider(tiandiText)
       viewer.camera.setView({
         // eslint-disable-next-line no-undef
-        destination: Cesium.Cartesian3.fromDegrees(118.76741, 32.041546, 30000.0)
+        destination: Cesium.Cartesian3.fromDegrees(118.76741, 32.041546, 48000.0)
       })
 
       this.viewer = viewer
     },
-    generateView () {
-      this.viewer.entities.removeAll()
-      this.riskLoading = true
-      this.riskText = '生成中'
-      this.msgWarning('正在生成图像（可能会花费较长时间）')
-      const queryParams = {
-        layerName: this.projectName
-      }
-      getRisk(queryParams).then(response => {
-        if (!response.data.error) {
-          let pointsList = response.data.riskareainfo // 多边形点集
-          let points = response.data.points // 风险点集
-          // 风险点标注
-          for (let point of points) {
-            this.viewer.entities.add({
-              // eslint-disable-next-line no-undef
-              position: Cesium.Cartesian3.fromDegrees(point.lon, point.lat),
-              point: {
-                pixelSize: 5,
-                // eslint-disable-next-line no-undef
-                color: Cesium.Color.RED
-              }
-            })
+    getProjectList () {
+      getOpenLast().then(response => {
+        this.projectList = []
+        for (let item of response.data) {
+          if (item.valid === 1) {
+            this.projectList.push(item)
           }
-          // 多边形绘制
-          for (let set of pointsList) {
-            let conList = []
-            for (let pot of set.spionts) {
-              conList.push(pot.lon, pot.lat)
-            }
-            if (conList.length > 4) {
-              this.viewer.entities.add({
-                polygon: {
-                  // eslint-disable-next-line no-undef
-                  hierarchy: Cesium.Cartesian3.fromDegreesArray(conList),
-                  height: 0,
-                  // eslint-disable-next-line no-undef
-                  material: Cesium.Color.RED.withAlpha(0.5),
-                  outline: false
-                }
-              })
-            }
-          }
-          this.riskLoading = false
-          this.riskText = '生成图像'
-          this.msgSuccess('查询成功！')
-          this.riskButton = true
-          this.clearWarnButton = false
-        } else {
-          this.msgError(response.data.error)
-          this.riskLoading = false
         }
-      }).catch(function (e) {
-        this.msgError(e)
-        this.riskLoading = false
-        this.riskText = '生成图像'
+        if (this.projectList[0]) {
+          this.form.project = this.projectList[0]
+          this.openLayers(this.projectList[0])
+        }
       })
     },
-    tableView () {
+    generateView () {
+      console.time('Test')
+      this.$refs['form'].validate((valid) => {
+        if (valid) {
+          this.viewer.entities.removeAll()
+          this.riskLoading = true
+          this.riskText = '生成中'
+          this.msgWarning('正在生成图像（可能会花费较长时间）')
+          const queryParams = {
+            layerName: this.form.project.layerName
+          }
+          getRisk(queryParams).then(response => {
+            if (!response.data.error) {
+              let pointsList = response.data.riskareainfo // 多边形点集
+              let points = response.data.points // 风险点集
+              // 风险点标注
+              for (let point of points) {
+                this.viewer.entities.add({
+                  // eslint-disable-next-line no-undef
+                  position: Cesium.Cartesian3.fromDegrees(point.lon, point.lat),
+                  point: {
+                    pixelSize: 5,
+                    // eslint-disable-next-line no-undef
+                    color: Cesium.Color.RED
+                  }
+                })
+              }
+              // 多边形绘制
+              for (let set of pointsList) {
+                let conList = []
+                for (let pot of set.spionts) {
+                  conList.push(pot.lon, pot.lat)
+                }
+                if (conList.length > 4) {
+                  this.viewer.entities.add({
+                    polygon: {
+                      // eslint-disable-next-line no-undef
+                      hierarchy: Cesium.Cartesian3.fromDegreesArray(conList),
+                      height: 0,
+                      // eslint-disable-next-line no-undef
+                      material: Cesium.Color.RED.withAlpha(0.5),
+                      outline: false
+                    }
+                  })
+                }
+              }
+              this.riskLoading = false
+              this.riskText = '生成图像'
+              this.msgSuccess('查询成功！')
+              this.riskButton = true
+              this.clearWarnButton = false
+              console.timeEnd('Test')
+            } else {
+              this.msgError(response.data.error)
+              this.riskLoading = false
+              console.timeEnd('Test')
+            }
+          }).catch(function (e) {
+            this.msgError(e)
+            this.riskLoading = false
+            this.riskText = '生成图像'
+          })
+        } else {
+          console.log('error submit!!')
+          return false
+        }
+      })
+    },
+    openLayers (project) {
+      this.viewer.imageryLayers.remove(this.currentLayer)
+      // eslint-disable-next-line no-undef
+      const newSource = new Cesium.WebMapServiceImageryProvider({
+        url: project.url,
+        request: project.request,
+        layers: project.layers,
+        version: project.version,
+        // eslint-disable-next-line no-undef
+        proxy: new Cesium.DefaultProxy('/proxy/'),
+        parameters: {
+          service: project.service,
+          format: 'image/png',
+          srs: project.srs,
+          transparent: true
+        },
+        getFeatureInfoParameters: {
+          request: 'GetFeatureInfo'
+        }
+      })
+      this.currentLayer = this.viewer.imageryLayers.addImageryProvider(newSource)
+      let center = project.bbox.split(',')
+      const longitude = (Number(center[0]) + Number(center[2])) / 2
+      const latitude = (Number(center[1]) + Number(center[3])) / 2
+      this.viewer.camera.flyTo({
+        // eslint-disable-next-line no-undef
+        destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, 48000.0)
+      })
     },
     clearWarn () {
       this.viewer.entities.removeAll()
       this.riskButton = false
-      this.tableViewButton = true
       this.clearWarnButton = true
     }
   }
