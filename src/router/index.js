@@ -15,12 +15,16 @@ export default new Router({
       ]
     },
     {
+      path: '/',
+      redirect: '/home'
+    },
+    {
       path: '/home',
       component: () => import('@/components/views/home')
     },
     {
-      path: '/',
-      redirect: '/home'
+      path: '/test',
+      component: () => import('@/components/views/test')
     },
     {
       path: '/404',
