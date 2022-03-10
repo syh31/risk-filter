@@ -219,13 +219,13 @@ export default {
 
 <style scoped>
 .container {
-  width: 100%;
+  width: 100vw;
   height: 100vh;
 }
 
 #cesiumContainer {
   width: 100%;
-  height: 100vh;
+  height: 100%;
 }
 
 .risk-window {
